@@ -194,28 +194,50 @@
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
   // ---------- materials ----------
-  const oakFloor = canvasTex(1024, 1024, (g, w, h) => {
-    const rows = 8, rh = h / rows;
-    for (let r = 0; r < rows; r++) {
-      let x = -rnd() * 400;
-      while (x < w) {
-        const len = 260 + rnd() * 260;
-        const l = 62 + rnd() * 8;
-        g.fillStyle = `hsl(${30 + rnd() * 6}, ${32 + rnd() * 10}%, ${l}%)`;
-        g.fillRect(x, r * rh, len, rh);
-        g.strokeStyle = 'rgba(90,60,30,0.08)';
-        for (let i = 0; i < 9; i++) {
-          const yy = r * rh + rnd() * rh;
-          g.beginPath(); g.moveTo(x, yy); g.bezierCurveTo(x + len * .3, yy + 4, x + len * .6, yy - 4, x + len, yy); g.stroke();
-        }
-        g.fillStyle = 'rgba(60,40,20,0.35)';
-        g.fillRect(x, r * rh, 2, rh);
-        x += len;
+  // polished marble tiles, 80 × 80 cm: 4 × 4 tiles per texture, repeated across the 8 × 7 m floor
+  const TILE = 0.8, TILES_PER_TEX = 4;
+  const marbleFloor = canvasTex(2048, 2048, (g, w, h) => {
+    const ts = w / TILES_PER_TEX;
+    for (let ty = 0; ty < TILES_PER_TEX; ty++) for (let tx = 0; tx < TILES_PER_TEX; tx++) {
+      const x0 = tx * ts, y0 = ty * ts;
+      g.save();
+      g.beginPath(); g.rect(x0, y0, ts, ts); g.clip();
+      // base: soft warm grey with a slight per-tile shade shift
+      const l = 80 + rnd() * 3;
+      g.fillStyle = `hsl(38, 8%, ${l}%)`; g.fillRect(x0, y0, ts, ts);
+      // cloudy mottling
+      for (let i = 0; i < 14; i++) {
+        const cx = x0 + rnd() * ts, cy = y0 + rnd() * ts, r = 60 + rnd() * 180;
+        const grd = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+        const dark = rnd() < 0.5;
+        grd.addColorStop(0, dark ? 'rgba(150,145,140,0.06)' : 'rgba(255,255,252,0.14)');
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = grd; g.fillRect(x0, y0, ts, ts);
       }
-      g.fillStyle = 'rgba(60,40,20,0.3)';
-      g.fillRect(0, r * rh, w, 2);
+      // veins run diagonally, each tile turned a different way
+      const ang = (rnd() < 0.5 ? 0.6 : 2.3) + (rnd() - 0.5) * 0.5;
+      const dx = Math.cos(ang), dy = Math.sin(ang);
+      for (let v = 0; v < 7; v++) {
+        const main = v < 2;
+        g.strokeStyle = main ? `rgba(105,100,98,${0.35 + rnd() * 0.2})` : `rgba(130,126,122,${0.12 + rnd() * 0.15})`;
+        g.lineWidth = main ? 1.6 + rnd() * 1.8 : 0.6 + rnd() * 0.9;
+        g.shadowColor = 'rgba(110,105,100,0.45)'; g.shadowBlur = main ? 8 : 3;
+        let px = x0 + rnd() * ts - dx * ts, py = y0 + rnd() * ts - dy * ts;
+        g.beginPath(); g.moveTo(px, py);
+        for (let k = 0; k < 40; k++) {
+          px += dx * ts / 14 + (rnd() - 0.5) * 22;
+          py += dy * ts / 14 + (rnd() - 0.5) * 22;
+          g.lineTo(px, py);
+        }
+        g.stroke();
+      }
+      g.restore();
+      // grout: half a line on every tile edge so the texture tiles seamlessly
+      g.fillStyle = 'rgba(150,146,140,0.9)';
+      g.fillRect(x0, y0, ts, 2); g.fillRect(x0, y0 + ts - 2, ts, 2);
+      g.fillRect(x0, y0, 2, ts); g.fillRect(x0 + ts - 2, y0, 2, ts);
     }
-  }, [3, 3]);
+  }, [8 / (TILE * TILES_PER_TEX), 7 / (TILE * TILES_PER_TEX)]);
 
   const rugTex = canvasTex(512, 512, (g, w, h) => {
     g.fillStyle = '#d8d2c6'; g.fillRect(0, 0, w, h);
@@ -242,7 +264,7 @@
   });
 
   const M = {
-    floor: mat(0xffffff, { map: oakFloor, roughness: 0.55 }),
+    floor: mat(0xffffff, { map: marbleFloor, roughness: 0.22, metalness: 0.05 }),
     wall: mat(0xcfd4d2, { roughness: 0.92 }),
     wallBack: mat(0xc6ccca, { roughness: 0.92 }),
     walnut: mat(0x5a3a24, { roughness: 0.55 }),
@@ -275,7 +297,7 @@
   box(0.02, 0.08, D, M.frame, -W / 2 + 0.01, 0.04, 0);
   box(0.02, 0.08, D, M.frame, W / 2 - 0.01, 0.04, 0);
   // floor edge so the cutaway reads as a solid slab
-  box(W + 0.24, 0.18, D + 0.12, mat(0x2a2e33), 0, -0.09, 0.06, scene, false);
+  box(W + 0.24, 0.18, D + 0.12, mat(0x2a2e33), 0, -0.095, 0.06, scene, false);   // top sits 5 mm below the floor to avoid z-fighting
 
   // ---------- walnut slat feature wall behind the bed ----------
   const bedZ = -0.6;
@@ -547,13 +569,13 @@
     const d = 1 - m;
     hemi.intensity = 0.15 + 0.55 * d;
     ambient.intensity = 0.05 + 0.1 * d;
-    sun.intensity = 2.4 * d;
+    sun.intensity = 2.0 * d;
     fill.intensity = 0.08 + 0.3 * d;
     paneMat.color.copy(skyDay).lerp(skyNight, m);
     moon.material.opacity = m;
     scene.background = bgDay.clone().lerp(bgNight, m);
     lamps.forEach(l => { l.light.intensity = 0.25 + 2.2 * m; l.bulb.material.emissiveIntensity = 0.3 + 2.2 * m; });
-    renderer.toneMappingExposure = 1.05 - 0.1 * m;
+    renderer.toneMappingExposure = 0.9 + 0.05 * m;
   }
 
   // ---------- UI ----------

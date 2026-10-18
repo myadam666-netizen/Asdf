@@ -107,7 +107,7 @@
   <div class="card-head">
     <div>
       <h1>Slate Room</h1>
-      <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 75″ TV, and a pair of armchairs around a marble coffee table.</p>
+      <p>A 5.6 × 5 m bedroom: walnut slat wall, platform bed, wall-mounted 65″ TV, and a pair of armchairs around a marble coffee table.</p>
     </div>
     <button id="btn-hide" title="Hide controls (H)">Hide</button>
   </div>
@@ -152,10 +152,10 @@
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
   const VIEWS = {
-    home:  { pos: new THREE.Vector3(-2.4, 4.2, 8.4), target: new THREE.Vector3(0.6, 1.0, -0.8) },
-    tv:    { pos: new THREE.Vector3(0.2, 1.6, 0.6),  target: new THREE.Vector3(3.9, 1.45, -0.6) },
-    table: { pos: new THREE.Vector3(1.6, 2.6, 1.4),  target: new THREE.Vector3(1.6, 0.45, -2.3) },
-    bed:   { pos: new THREE.Vector3(0.4, 2.5, 2.6),  target: new THREE.Vector3(-2.8, 0.6, -0.6) },
+    home:  { pos: new THREE.Vector3(-1.9, 3.4, 6.3), target: new THREE.Vector3(0.4, 0.9, -0.5) },
+    tv:    { pos: new THREE.Vector3(-0.3, 1.55, -0.3), target: new THREE.Vector3(2.7, 1.45, -0.3) },
+    table: { pos: new THREE.Vector3(0.8, 2.3, 1.0),  target: new THREE.Vector3(0.8, 0.45, -1.75) },
+    bed:   { pos: new THREE.Vector3(0.7, 2.3, 2.1),  target: new THREE.Vector3(-1.6, 0.6, -0.3) },
   };
   camera.position.copy(VIEWS.home.pos);
 
@@ -164,7 +164,7 @@
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
   controls.minDistance = 2;
-  controls.maxDistance = 15;
+  controls.maxDistance = 11;
   controls.maxPolarAngle = 1.42;
   controls.enablePan = false;
 
@@ -194,7 +194,7 @@
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
   // ---------- materials ----------
-  // polished marble tiles, 80 × 80 cm: 4 × 4 tiles per texture, repeated across the 8 × 7 m floor
+  // polished marble tiles, 80 × 80 cm: 4 × 4 tiles per texture, repeated across the 5.6 × 5 m floor
   const TILE = 0.8, TILES_PER_TEX = 4;
   const marbleFloor = canvasTex(2048, 2048, (g, w, h) => {
     const ts = w / TILES_PER_TEX;
@@ -237,7 +237,7 @@
       g.fillRect(x0, y0, ts, 2); g.fillRect(x0, y0 + ts - 2, ts, 2);
       g.fillRect(x0, y0, 2, ts); g.fillRect(x0 + ts - 2, y0, 2, ts);
     }
-  }, [8 / (TILE * TILES_PER_TEX), 7 / (TILE * TILES_PER_TEX)]);
+  }, [5.6 / (TILE * TILES_PER_TEX), 5 / (TILE * TILES_PER_TEX)]);
 
   const rugTex = canvasTex(512, 512, (g, w, h) => {
     g.fillStyle = '#d8d2c6'; g.fillRect(0, 0, w, h);
@@ -286,7 +286,7 @@
   };
 
   // ---------- room shell (open toward the viewer) ----------
-  const W = 8, D = 7, H = 3.0;
+  const W = 5.6, D = 5, H = 2.8;
   const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(W, D), M.floor), 0, 0, 0, scene, false);
   floor.rotation.x = -Math.PI / 2;
   const backWall = box(W, H, 0.12, M.wallBack, 0, H / 2, -D / 2 - 0.06, scene, false);
@@ -300,7 +300,7 @@
   box(W + 0.24, 0.18, D + 0.12, mat(0x2a2e33), 0, -0.095, 0.06, scene, false);   // top sits 5 mm below the floor to avoid z-fighting
 
   // ---------- walnut slat feature wall behind the bed ----------
-  const bedZ = -0.6;
+  const bedZ = -0.3;
   for (let z = bedZ - 1.7; z <= bedZ + 1.7; z += 0.11) {
     box(0.035, H - 0.02, 0.06, rnd() < 0.5 ? M.walnut : M.walnutLight, -W / 2 + 0.02, H / 2, z);
   }
@@ -356,25 +356,25 @@
 
   // ---------- TV wall: console, soundbar, TV ----------
   const tvZ = bedZ, tvX = W / 2 - 0.04;
-  box(0.45, 0.42, 2.6, M.walnut, W / 2 - 0.26, 0.4, tvZ);                     // console carcass
-  for (let z = tvZ - 1.25; z <= tvZ + 1.25; z += 0.06) {                       // slatted front
+  box(0.45, 0.42, 2.0, M.walnut, W / 2 - 0.26, 0.4, tvZ);                     // console carcass
+  for (let z = tvZ - 0.95; z <= tvZ + 0.95; z += 0.06) {                       // slatted front
     box(0.02, 0.36, 0.03, M.walnutLight, W / 2 - 0.495, 0.4, z);
   }
-  [[-1.2], [1.2]].forEach(([dz]) => {
+  [[-0.9], [0.9]].forEach(([dz]) => {
     [-0.15, 0.15].forEach(dx => cyl(0.014, 0.01, 0.19, M.brass, W / 2 - 0.26 + dx, 0.095, tvZ + dz, scene, 10));
   });
   box(0.1, 0.07, 0.95, M.black, W / 2 - 0.2, 0.645, tvZ);                     // soundbar
   // decor on console
-  cyl(0.09, 0.07, 0.2, M.terracotta, W / 2 - 0.28, 0.71, tvZ + 1.0);
+  cyl(0.09, 0.07, 0.2, M.terracotta, W / 2 - 0.28, 0.71, tvZ + 0.75);
   for (let i = 0; i < 9; i++) {
-    const s = add(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.32 + rnd() * 0.2, 5), M.leaf), W / 2 - 0.28 + (rnd() - .5) * .08, 0.95, tvZ + 1.0 + (rnd() - .5) * .08);
+    const s = add(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.32 + rnd() * 0.2, 5), M.leaf), W / 2 - 0.28 + (rnd() - .5) * .08, 0.95, tvZ + 0.75 + (rnd() - .5) * .08);
     s.rotation.set((rnd() - .5) * .5, 0, (rnd() - .5) * .5);
   }
-  box(0.18, 0.03, 0.24, mat(0xd9d2c3), W / 2 - 0.28, 0.625, tvZ - 1.0);
-  box(0.16, 0.03, 0.22, mat(0x3d4a5c), W / 2 - 0.28, 0.655, tvZ - 1.0);
+  box(0.18, 0.03, 0.24, mat(0xd9d2c3), W / 2 - 0.28, 0.625, tvZ - 0.75);
+  box(0.16, 0.03, 0.22, mat(0x3d4a5c), W / 2 - 0.28, 0.655, tvZ - 0.75);
 
-  // TV: 75" (1.66 × 0.93 m) on a slim wall mount
-  const TVW = 1.66, TVH = 0.93;
+  // TV: 65" (1.44 × 0.81 m) on a slim wall mount
+  const TVW = 1.44, TVH = 0.81;
   box(0.04, TVH + 0.02, TVW + 0.02, M.tvBody, tvX - 0.06, 1.48, tvZ);
   const tvCanvas = document.createElement('canvas'); tvCanvas.width = 640; tvCanvas.height = 360;
   const tvCtx = tvCanvas.getContext('2d');
@@ -389,15 +389,15 @@
   scene.add(tvLight);
 
   // ---------- rug + coffee table ----------
-  const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.0), M.rug), 1.6, 0.006, -2.3, scene, false);
+  const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.45), M.rug), 0.8, 0.006, -1.75, scene, false);
   rug.rotation.x = -Math.PI / 2;
   const ct = new THREE.Group(); scene.add(ct);
-  const ctX = 1.6, ctZ = -2.25;                                                  // reading nook under the window
+  const ctX = 0.8, ctZ = -1.7;                                                   // reading nook under the window
   const top = add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.035, 64), M.marble), ctX, 0.42, ctZ, ct);
-  top.scale.set(1.0, 1, 1.5);                                                    // oval top, 1.0 × 1.5 m
+  top.scale.set(0.8, 1, 1.1);                                                    // oval top, 0.8 × 1.1 m
   const shelf = add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.025, 48), M.walnut), ctX, 0.14, ctZ, ct);
-  shelf.scale.set(1.0, 1, 1.5);
-  [[0.28, 0.48], [-0.28, 0.48], [0.28, -0.48], [-0.28, -0.48]].forEach(([dx, dz]) =>
+  shelf.scale.set(0.8, 1, 1.1);
+  [[0.22, 0.36], [-0.22, 0.36], [0.22, -0.36], [-0.22, -0.36]].forEach(([dx, dz]) =>
     cyl(0.014, 0.014, 0.4, M.black, ctX + dx, 0.2, ctZ + dz, ct, 10));
   // things on the table
   const tray = cyl(0.17, 0.17, 0.02, M.brass, ctX - 0.05, 0.448, ctZ - 0.3, ct, 40);
@@ -411,7 +411,7 @@
   bowl.material = M.terracotta.clone(); bowl.material.side = THREE.DoubleSide;
 
   // ---------- window on back wall ----------
-  const winX = 1.4, winW = 2.0, winH = 1.7, winY = 1.55;
+  const winX = 0.8, winW = 1.6, winH = 1.5, winY = 1.5;
   const paneMat = new THREE.MeshBasicMaterial({ color: 0x9ec7e8 });
   const pane = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), paneMat);
   pane.position.set(winX, winY, -D / 2 + 0.005); scene.add(pane);
@@ -424,13 +424,13 @@
   // sheer curtains
   const sheer = mat(0xf3f1ec, { roughness: 1, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
   [-1, 1].forEach(s => {
-    const geo = new THREE.PlaneGeometry(0.55, 2.7, 24, 1);
+    const geo = new THREE.PlaneGeometry(0.55, 2.5, 24, 1);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 34) * 0.03);
     geo.computeVertexNormals();
-    add(new THREE.Mesh(geo, sheer), winX + s * (winW / 2 + 0.25), 1.4, -D / 2 + 0.14, scene, false);
+    add(new THREE.Mesh(geo, sheer), winX + s * (winW / 2 + 0.25), 1.3, -D / 2 + 0.14, scene, false);
   });
-  cyl(0.012, 0.012, winW + 1.4, M.black, winX, 2.78, -D / 2 + 0.14, scene, 8).rotation.z = Math.PI / 2;
+  cyl(0.012, 0.012, winW + 1.4, M.black, winX, 2.58, -D / 2 + 0.14, scene, 8).rotation.z = Math.PI / 2;
   // moon (visible at night)
   const moon = new THREE.Mesh(new THREE.CircleGeometry(0.09, 32), new THREE.MeshBasicMaterial({ color: 0xf2efe2, transparent: true, opacity: 0 }));
   moon.position.set(winX + 0.5, winY + 0.45, -D / 2 + 0.01); scene.add(moon);
@@ -447,23 +447,23 @@
     [[-0.36, -0.32], [0.36, -0.32], [-0.36, 0.32], [0.36, 0.32]].forEach(([cx, cz]) => cyl(0.02, 0.014, 0.24, M.walnut, cx, 0.12, cz, chair, 10));
     box(0.34, 0.3, 0.1, cushionMat, 0.1, 0.58, -0.2, chair).rotation.set(-0.2, 0.2, 0.1);
   }
-  armchair(ctX - 1.25, ctZ - 0.1, 1.25, M.throwM);
-  armchair(ctX + 1.25, ctZ - 0.1, -1.25, M.duvet);
+  armchair(ctX - 1.1, ctZ - 0.1, 1.25, M.throwM);
+  armchair(ctX + 1.1, ctZ - 0.1, -1.25, M.duvet);
 
   // arc floor lamp behind the right-hand chair
-  const lampBase = cyl(0.16, 0.16, 0.03, M.black, 3.6, 0.015, -3.15);
+  const lampBase = cyl(0.16, 0.16, 0.03, M.black, 2.5, 0.015, -2.25);
   const arc = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(3.6, 0.02, -3.15), new THREE.Vector3(3.6, 1.6, -3.15), new THREE.Vector3(3.45, 2.1, -2.85), new THREE.Vector3(3.15, 2.05, -2.5)
+    new THREE.Vector3(2.5, 0.02, -2.25), new THREE.Vector3(2.5, 1.6, -2.25), new THREE.Vector3(2.4, 2.1, -2.05), new THREE.Vector3(2.1, 2.05, -1.85)
   ]);
   add(new THREE.Mesh(new THREE.TubeGeometry(arc, 40, 0.012, 8), M.black), 0, 0, 0);
-  const floorShade = cyl(0.06, 0.17, 0.18, M.black, 3.15, 1.92, -2.5, scene, 32);
+  const floorShade = cyl(0.06, 0.17, 0.18, M.black, 2.1, 1.92, -1.85, scene, 32);
   floorShade.material = M.black.clone(); floorShade.material.side = THREE.DoubleSide;
   const floorBulb = add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 12),
-    new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffc87a, emissiveIntensity: 2 })), 3.15, 1.84, -2.5, scene, false);
-  lamps.push({ bulb: floorBulb, light: null, pos: new THREE.Vector3(3.15, 1.78, -2.5) });
+    new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffc87a, emissiveIntensity: 2 })), 2.1, 1.84, -1.85, scene, false);
+  lamps.push({ bulb: floorBulb, light: null, pos: new THREE.Vector3(2.1, 1.78, -1.85) });
 
-  // ---------- fiddle-leaf fig in the front-left corner ----------
-  const plant = new THREE.Group(); plant.position.set(-3.45, 0, 2.6); scene.add(plant);
+  // ---------- fiddle-leaf fig in the front-right corner ----------
+  const plant = new THREE.Group(); plant.position.set(2.35, 0, 2.05); scene.add(plant);
   cyl(0.2, 0.16, 0.42, M.ceramic, 0, 0.21, 0, plant, 32);
   cyl(0.19, 0.19, 0.01, mat(0x3b2b1e), 0, 0.42, 0, plant);
   cyl(0.018, 0.024, 1.2, M.walnut, 0, 1.0, 0, plant, 8);
@@ -481,9 +481,9 @@
     g.fillStyle = '#c08a2e'; g.fillRect(w * .2, h * .6, w * .6, 26);
     g.fillStyle = '#a65a3c'; g.beginPath(); g.arc(w * .66, h * .34, 34, 0, Math.PI * 2); g.fill();
   });
-  box(0.03, 0.82, 0.62, M.black, -W / 2 + 0.02, 1.6, 2.1);
+  box(0.03, 0.82, 0.62, M.black, -W / 2 + 0.02, 1.55, 1.85);
   const print = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.74), new THREE.MeshStandardMaterial({ map: printTex, roughness: 0.9 }));
-  print.position.set(-W / 2 + 0.04, 1.6, 2.1); print.rotation.y = Math.PI / 2; scene.add(print);
+  print.position.set(-W / 2 + 0.04, 1.55, 1.85); print.rotation.y = Math.PI / 2; scene.add(print);
 
   // ---------- lighting ----------
   const hemi = new THREE.HemisphereLight(0xdfe9f3, 0x8a7560, 0.6); scene.add(hemi);

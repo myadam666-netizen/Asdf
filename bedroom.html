@@ -45,6 +45,16 @@
     display: grid;
     gap: 14px;
   }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .card-head > div { min-width: 0; }
+  .show-ui {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
   .card h1 { margin: 0; font-family: var(--display); font-size: 1.45rem; letter-spacing: -0.01em; text-wrap: balance; }
   .card p { margin: 4px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -94,9 +104,12 @@
 <div id="stage" aria-label="Interactive 3D model of a modern bedroom"></div>
 
 <section class="card" aria-label="Room controls">
-  <div>
-    <h1>Slate Room</h1>
-    <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 75″ TV and a marble coffee table.</p>
+  <div class="card-head">
+    <div>
+      <h1>Slate Room</h1>
+      <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 75″ TV and a marble coffee table.</p>
+    </div>
+    <button id="btn-hide" title="Hide controls (H)">Hide</button>
   </div>
   <div class="row" role="group" aria-label="Lighting">
     <button id="btn-day" aria-pressed="false">Day</button>
@@ -115,7 +128,9 @@
   <div class="status"><span id="st-ch">CH 1 · Coastline</span><span id="st-time">19:40</span></div>
 </section>
 
-<div class="hint">Drag to look around · scroll or pinch to zoom · tap the TV</div>
+<button id="btn-show" class="show-ui" title="Show controls (H)" hidden>Show controls</button>
+
+<div class="hint" id="hint">Drag to look around · scroll or pinch to zoom · tap the TV</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
@@ -553,6 +568,19 @@
   const toggleTV = () => { state.tv = !state.tv; state.chBanner = state.tv ? 2.5 : 0; sync(); };
   $('btn-tv').onclick = toggleTV;
   $('btn-ch').onclick = () => { state.ch = (state.ch + 1) % CHANNELS.length; state.chBanner = 2.5; sync(); };
+  const card = document.querySelector('.card');
+  const setUI = show => {
+    card.hidden = !show;
+    $('hint').hidden = !show;
+    $('btn-show').hidden = show;
+    (show ? $('btn-hide') : $('btn-show')).focus();
+  };
+  $('btn-hide').onclick = () => setUI(false);
+  $('btn-show').onclick = () => setUI(true);
+  addEventListener('keydown', e => {
+    if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !e.altKey) setUI(card.hidden);
+  });
+
   let fly = null;
   const viewIds = Object.keys(VIEWS);
   const markView = k => viewIds.forEach(v => $('view-' + v).setAttribute('aria-pressed', String(v === k)));

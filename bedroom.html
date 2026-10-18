@@ -1,0 +1,611 @@
+<title>Slate Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+  /* Layout: full-bleed 3D room, one floating control card top-left, hint chip bottom. */
+  :root {
+    --bg: #e6e8e6;
+    --panel: rgba(250, 251, 250, 0.86);
+    --fg: #1d2329;
+    --muted: #5f6b73;
+    --line: rgba(29, 35, 41, 0.12);
+    --accent: #b9802a;
+    --accent-fg: #fff;
+    --display: "Syne", "Avenir Next", "Segoe UI", sans-serif;
+    --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161a; --panel: rgba(22, 27, 32, 0.84); --fg: #e9ecee; --muted: #9aa6ae;
+      --line: rgba(233, 236, 238, 0.14); --accent: #d9a24a; --accent-fg: #1a1408; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161a; --panel: rgba(22, 27, 32, 0.84); --fg: #e9ecee; --muted: #9aa6ae;
+    --line: rgba(233, 236, 238, 0.14); --accent: #d9a24a; --accent-fg: #1a1408; color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--body); overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  .card {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    width: min(300px, calc(100vw - 32px));
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px 18px;
+    display: grid;
+    gap: 14px;
+  }
+  .card h1 { margin: 0; font-family: var(--display); font-size: 1.45rem; letter-spacing: -0.01em; text-wrap: balance; }
+  .card p { margin: 4px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    font: 500 0.8rem/1 var(--body);
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 9px 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .status {
+    font: 400 0.72rem/1.4 var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    display: flex; justify-content: space-between; gap: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hint {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    left: 50%; transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font: 400 0.75rem/1 var(--mono);
+    color: var(--muted);
+    white-space: nowrap;
+    max-width: calc(100vw - 32px);
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  @media (max-width: 480px) {
+    .card { gap: 10px; padding: 12px 14px 14px; }
+    .card p { display: none; }
+  }
+</style>
+
+<div id="stage" aria-label="Interactive 3D model of a modern bedroom"></div>
+
+<section class="card" aria-label="Room controls">
+  <div>
+    <h1>Slate Room</h1>
+    <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 55″ TV and a marble coffee table.</p>
+  </div>
+  <div class="row" role="group" aria-label="Lighting">
+    <button id="btn-day" aria-pressed="false">Day</button>
+    <button id="btn-night" aria-pressed="true">Evening</button>
+  </div>
+  <div class="row" role="group" aria-label="Television">
+    <button id="btn-tv" aria-pressed="true">TV on</button>
+    <button id="btn-ch">Next channel</button>
+    <button id="btn-view">Reset view</button>
+  </div>
+  <div class="status"><span id="st-ch">CH 1 · Coastline</span><span id="st-time">19:40</span></div>
+</section>
+
+<div class="hint">Drag to look around · scroll or pinch to zoom · tap the TV</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- renderer / scene ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  const HOME = { pos: new THREE.Vector3(5.6, 4.4, 8.6), target: new THREE.Vector3(0, 1.0, -0.6) };
+  camera.position.copy(HOME.pos);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.copy(HOME.target);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+  controls.minDistance = 3;
+  controls.maxDistance = 15;
+  controls.maxPolarAngle = 1.42;
+  controls.minAzimuthAngle = -1.15;
+  controls.maxAzimuthAngle = 1.15;
+  controls.enablePan = false;
+
+  // ---------- helpers ----------
+  const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0, ...o });
+  function add(mesh, x, y, z, parent = scene, cast = true) {
+    mesh.position.set(x, y, z);
+    mesh.castShadow = cast;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  }
+  const box = (w, h, d, m, x, y, z, p, cast) => add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m), x, y, z, p, cast);
+  const cyl = (rt, rb, h, m, x, y, z, p, seg = 24) => add(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m), x, y, z, p);
+  function canvasTex(w, h, draw, repeat) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+    return t;
+  }
+  const lamps = [];
+  // deterministic noise so the room looks the same every load
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  // ---------- materials ----------
+  const oakFloor = canvasTex(1024, 1024, (g, w, h) => {
+    const rows = 8, rh = h / rows;
+    for (let r = 0; r < rows; r++) {
+      let x = -rnd() * 400;
+      while (x < w) {
+        const len = 260 + rnd() * 260;
+        const l = 62 + rnd() * 8;
+        g.fillStyle = `hsl(${30 + rnd() * 6}, ${32 + rnd() * 10}%, ${l}%)`;
+        g.fillRect(x, r * rh, len, rh);
+        g.strokeStyle = 'rgba(90,60,30,0.08)';
+        for (let i = 0; i < 9; i++) {
+          const yy = r * rh + rnd() * rh;
+          g.beginPath(); g.moveTo(x, yy); g.bezierCurveTo(x + len * .3, yy + 4, x + len * .6, yy - 4, x + len, yy); g.stroke();
+        }
+        g.fillStyle = 'rgba(60,40,20,0.35)';
+        g.fillRect(x, r * rh, 2, rh);
+        x += len;
+      }
+      g.fillStyle = 'rgba(60,40,20,0.3)';
+      g.fillRect(0, r * rh, w, 2);
+    }
+  }, [3, 3]);
+
+  const rugTex = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#d8d2c6'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 9000; i++) {
+      g.fillStyle = `rgba(${rnd() < .5 ? '255,255,255' : '80,70,60'},${0.05 + rnd() * .06})`;
+      g.fillRect(rnd() * w, rnd() * h, 2, 2);
+    }
+    g.strokeStyle = '#3d4a5c'; g.lineWidth = 10;
+    g.strokeRect(26, 26, w - 52, h - 52);
+    g.lineWidth = 3; g.strokeStyle = '#b9802a';
+    g.strokeRect(48, 48, w - 96, h - 96);
+  });
+
+  const marbleTex = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#eeeeea'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) {
+      g.strokeStyle = `rgba(110,115,120,${0.06 + rnd() * 0.18})`;
+      g.lineWidth = 0.6 + rnd() * 2.2;
+      let x = rnd() * w, y = 0;
+      g.beginPath(); g.moveTo(x, y);
+      while (y < h) { x += (rnd() - .4) * 40; y += 20 + rnd() * 30; g.lineTo(x, y); }
+      g.stroke();
+    }
+  });
+
+  const M = {
+    floor: mat(0xffffff, { map: oakFloor, roughness: 0.55 }),
+    wall: mat(0xcfd4d2, { roughness: 0.92 }),
+    wallBack: mat(0xc6ccca, { roughness: 0.92 }),
+    walnut: mat(0x5a3a24, { roughness: 0.55 }),
+    walnutLight: mat(0x7a5236, { roughness: 0.6 }),
+    linen: mat(0xf0efea, { roughness: 0.95 }),
+    duvet: mat(0x3d4a5c, { roughness: 0.95 }),
+    throwM: mat(0xc08a2e, { roughness: 1 }),
+    headboard: mat(0x8f9a9a, { roughness: 1 }),
+    black: mat(0x1b1d20, { roughness: 0.4, metalness: 0.6 }),
+    brass: mat(0xc9a15a, { roughness: 0.3, metalness: 0.9 }),
+    marble: mat(0xffffff, { map: marbleTex, roughness: 0.18 }),
+    rug: mat(0xffffff, { map: rugTex, roughness: 1 }),
+    ceramic: mat(0xe9e4dc, { roughness: 0.35 }),
+    terracotta: mat(0xa65a3c, { roughness: 0.8 }),
+    leaf: mat(0x3f6b45, { roughness: 0.7, side: THREE.DoubleSide }),
+    boucle: mat(0xe4ded3, { roughness: 1 }),
+    frame: mat(0xf4f4f2, { roughness: 0.5 }),
+    tvBody: mat(0x0d0e10, { roughness: 0.3, metalness: 0.5 }),
+  };
+
+  // ---------- room shell (open toward the viewer) ----------
+  const W = 8, D = 7, H = 3.0;
+  const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(W, D), M.floor), 0, 0, 0, scene, false);
+  floor.rotation.x = -Math.PI / 2;
+  box(W, H, 0.12, M.wallBack, 0, H / 2, -D / 2 - 0.06, scene, false);          // back
+  const leftWall = box(0.12, H, D, M.wall, -W / 2 - 0.06, H / 2, 0, scene, false);
+  const rightWall = box(0.12, H, D, M.wall, W / 2 + 0.06, H / 2, 0, scene, false);
+  // skirting
+  box(W, 0.08, 0.02, M.frame, 0, 0.04, -D / 2 + 0.01);
+  box(0.02, 0.08, D, M.frame, -W / 2 + 0.01, 0.04, 0);
+  box(0.02, 0.08, D, M.frame, W / 2 - 0.01, 0.04, 0);
+  // floor edge so the cutaway reads as a solid slab
+  box(W + 0.24, 0.18, D + 0.12, mat(0x2a2e33), 0, -0.09, 0.06, scene, false);
+
+  // ---------- walnut slat feature wall behind the bed ----------
+  const bedZ = -0.6;
+  for (let z = bedZ - 1.7; z <= bedZ + 1.7; z += 0.11) {
+    box(0.035, H - 0.02, 0.06, rnd() < 0.5 ? M.walnut : M.walnutLight, -W / 2 + 0.02, H / 2, z);
+  }
+
+  // ---------- bed ----------
+  const bed = new THREE.Group(); scene.add(bed);
+  const bedX = -W / 2 + 0.12 + 1.1;
+  box(2.2, 0.22, 1.9, M.walnut, bedX, 0.17, bedZ, bed);                        // platform
+  box(2.0, 0.06, 1.7, M.black, bedX, 0.03, bedZ, bed);                         // recessed plinth
+  box(2.05, 0.22, 1.72, M.linen, bedX, 0.39, bedZ, bed);                       // mattress
+  box(1.55, 0.06, 1.82, M.duvet, bedX + 0.27, 0.52, bedZ, bed);                // duvet top
+  box(1.55, 0.2, 0.04, M.duvet, bedX + 0.27, 0.42, bedZ + 0.91, bed);          // duvet drop
+  box(1.55, 0.2, 0.04, M.duvet, bedX + 0.27, 0.42, bedZ - 0.91, bed);
+  box(0.04, 0.2, 1.82, M.duvet, bedX + 1.05, 0.42, bedZ, bed);
+  box(0.42, 0.04, 1.86, M.throwM, bedX + 0.75, 0.57, bedZ, bed);               // folded throw
+  // pillows
+  const pillowGeo = new THREE.CapsuleGeometry(0.12, 0.5, 6, 16);
+  [[-0.42, M.linen, 0.62], [0.42, M.linen, 0.62], [-0.38, M.duvet, 0.66], [0.38, M.duvet, 0.66]].forEach(([dz, m, y], i) => {
+    const p = add(new THREE.Mesh(pillowGeo, m), bedX - 0.82 + (i > 1 ? 0.14 : 0), y, bedZ + dz, bed);
+    p.rotation.x = Math.PI / 2;
+    p.rotation.z = i > 1 ? 0.35 : 0.22;
+    p.scale.set(1, 1, i > 1 ? 0.75 : 0.9);
+  });
+  // channel-tufted headboard
+  box(0.08, 1.0, 2.1, M.walnut, -W / 2 + 0.1, 0.95, bedZ, bed);
+  const tuft = new THREE.CapsuleGeometry(0.075, 0.72, 6, 12);
+  for (let i = 0; i < 12; i++) {
+    const t = add(new THREE.Mesh(tuft, M.headboard), -W / 2 + 0.17, 1.0, bedZ - 0.935 + i * 0.17, bed);
+    t.scale.set(0.7, 1, 1);
+  }
+
+  // ---------- nightstands + pendants ----------
+  [-1, 1].forEach(side => {
+    const z = bedZ + side * 1.35;
+    const g = new THREE.Group(); scene.add(g);
+    box(0.45, 0.42, 0.5, M.walnut, -W / 2 + 0.36, 0.33, z, g);
+    box(0.002, 0.003, 0.44, M.black, -W / 2 + 0.585, 0.33, z, g);              // drawer seam
+    box(0.02, 0.02, 0.12, M.brass, -W / 2 + 0.59, 0.41, z, g);                // pull
+    [[-0.17, -0.2], [-0.17, 0.2], [0.17, -0.2], [0.17, 0.2]].forEach(([dx, dz]) =>
+      cyl(0.012, 0.012, 0.12, M.black, -W / 2 + 0.36 + dx, 0.06, z + dz, g, 8));
+    // book + vase
+    box(0.22, 0.04, 0.16, mat(side < 0 ? 0x8b3d2f : 0x2f4f5a), -W / 2 + 0.3, 0.56, z - 0.06, g);
+    cyl(0.04, 0.055, 0.18, M.ceramic, -W / 2 + 0.45, 0.63, z + 0.13, g);
+    // pendant
+    cyl(0.004, 0.004, 1.3, M.black, -W / 2 + 0.4, H - 0.65, z, g, 6);
+    const shade = cyl(0.07, 0.16, 0.22, M.brass, -W / 2 + 0.4, H - 1.4, z, g, 32);
+    shade.material = M.brass.clone(); shade.material.side = THREE.DoubleSide;
+    const bulb = add(new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffc87a, emissiveIntensity: 2 })), -W / 2 + 0.4, H - 1.5, z, g, false);
+    bulb.userData.lamp = true;
+    lamps.push({ bulb, light: null, pos: new THREE.Vector3(-W / 2 + 0.4, H - 1.56, z) });
+  });
+
+  // ---------- TV wall: console, soundbar, TV ----------
+  const tvZ = bedZ, tvX = W / 2 - 0.04;
+  box(0.45, 0.42, 2.6, M.walnut, W / 2 - 0.26, 0.4, tvZ);                     // console carcass
+  for (let z = tvZ - 1.25; z <= tvZ + 1.25; z += 0.06) {                       // slatted front
+    box(0.02, 0.36, 0.03, M.walnutLight, W / 2 - 0.495, 0.4, z);
+  }
+  [[-1.2], [1.2]].forEach(([dz]) => {
+    [-0.15, 0.15].forEach(dx => cyl(0.014, 0.01, 0.19, M.brass, W / 2 - 0.26 + dx, 0.095, tvZ + dz, scene, 10));
+  });
+  box(0.1, 0.07, 0.95, M.black, W / 2 - 0.2, 0.645, tvZ);                     // soundbar
+  // decor on console
+  cyl(0.09, 0.07, 0.2, M.terracotta, W / 2 - 0.28, 0.71, tvZ + 1.0);
+  for (let i = 0; i < 9; i++) {
+    const s = add(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.32 + rnd() * 0.2, 5), M.leaf), W / 2 - 0.28 + (rnd() - .5) * .08, 0.95, tvZ + 1.0 + (rnd() - .5) * .08);
+    s.rotation.set((rnd() - .5) * .5, 0, (rnd() - .5) * .5);
+  }
+  box(0.18, 0.03, 0.24, mat(0xd9d2c3), W / 2 - 0.28, 0.625, tvZ - 1.0);
+  box(0.16, 0.03, 0.22, mat(0x3d4a5c), W / 2 - 0.28, 0.655, tvZ - 1.0);
+
+  // TV: 55" (1.22 × 0.69 m) on a slim wall mount
+  const TVW = 1.22 * 1.25, TVH = 0.69 * 1.25;
+  box(0.04, TVH + 0.02, TVW + 0.02, M.tvBody, tvX - 0.06, 1.48, tvZ);
+  const tvCanvas = document.createElement('canvas'); tvCanvas.width = 640; tvCanvas.height = 360;
+  const tvCtx = tvCanvas.getContext('2d');
+  const tvTex = new THREE.CanvasTexture(tvCanvas); tvTex.encoding = THREE.sRGBEncoding;
+  const screenMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: tvTex, emissiveIntensity: 1, roughness: 0.15, metalness: 0.2 });
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(TVW, TVH), screenMat);
+  screen.position.set(tvX - 0.085, 1.48, tvZ);
+  screen.rotation.y = -Math.PI / 2;
+  scene.add(screen);
+  const tvLight = new THREE.PointLight(0x88aaff, 0, 5, 1.6);
+  tvLight.position.set(tvX - 0.9, 1.45, tvZ);
+  scene.add(tvLight);
+
+  // ---------- rug + coffee table ----------
+  const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.9), M.rug), 1.0, 0.006, tvZ, scene, false);
+  rug.rotation.x = -Math.PI / 2;
+  const ct = new THREE.Group(); scene.add(ct);
+  const ctX = 1.2, ctZ = tvZ;
+  const top = add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.035, 64), M.marble), ctX, 0.42, ctZ, ct);
+  top.scale.set(1.0, 1, 1.5);                                                    // oval top, 1.0 × 1.5 m
+  const shelf = add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.025, 48), M.walnut), ctX, 0.14, ctZ, ct);
+  shelf.scale.set(1.0, 1, 1.5);
+  [[0.28, 0.48], [-0.28, 0.48], [0.28, -0.48], [-0.28, -0.48]].forEach(([dx, dz]) =>
+    cyl(0.014, 0.014, 0.4, M.black, ctX + dx, 0.2, ctZ + dz, ct, 10));
+  // things on the table
+  const tray = cyl(0.17, 0.17, 0.02, M.brass, ctX - 0.05, 0.448, ctZ - 0.3, ct, 40);
+  const mug = cyl(0.04, 0.036, 0.09, M.ceramic, ctX - 0.08, 0.503, ctZ - 0.32, ct);
+  const handle = add(new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.008, 8, 16), M.ceramic), ctX - 0.08, 0.505, ctZ - 0.37, ct);
+  cyl(0.036, 0.036, 0.004, mat(0x3a2414, { roughness: 0.2 }), ctX - 0.08, 0.543, ctZ - 0.32, ct);   // coffee
+  box(0.24, 0.035, 0.32, mat(0x2f4f5a), ctX + 0.05, 0.455, ctZ + 0.28, ct);
+  box(0.22, 0.03, 0.29, mat(0xe7dfcf), ctX + 0.06, 0.488, ctZ + 0.27, ct).rotation.y = 0.12;
+  box(0.08, 0.012, 0.14, M.black, ctX + 0.16, 0.445, ctZ - 0.02, ct).rotation.y = 0.5;               // remote
+  const bowl = add(new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M.terracotta), ctX - 0.18, 0.53, ctZ + 0.1, ct);
+  bowl.material = M.terracotta.clone(); bowl.material.side = THREE.DoubleSide;
+
+  // ---------- window on back wall ----------
+  const winX = 1.4, winW = 2.0, winH = 1.7, winY = 1.55;
+  const paneMat = new THREE.MeshBasicMaterial({ color: 0x9ec7e8 });
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), paneMat);
+  pane.position.set(winX, winY, -D / 2 + 0.005); scene.add(pane);
+  const fr = 0.05;
+  box(winW + fr * 2, fr, 0.08, M.frame, winX, winY + winH / 2 + fr / 2, -D / 2 + 0.03);
+  box(winW + fr * 2, fr, 0.14, M.frame, winX, winY - winH / 2 - fr / 2, -D / 2 + 0.06);
+  box(fr, winH, 0.08, M.frame, winX - winW / 2 - fr / 2, winY, -D / 2 + 0.03);
+  box(fr, winH, 0.08, M.frame, winX + winW / 2 + fr / 2, winY, -D / 2 + 0.03);
+  box(0.03, winH, 0.05, M.frame, winX, winY, -D / 2 + 0.03);
+  // sheer curtains
+  const sheer = mat(0xf3f1ec, { roughness: 1, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  [-1, 1].forEach(s => {
+    const geo = new THREE.PlaneGeometry(0.55, 2.7, 24, 1);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 34) * 0.03);
+    geo.computeVertexNormals();
+    add(new THREE.Mesh(geo, sheer), winX + s * (winW / 2 + 0.25), 1.4, -D / 2 + 0.14, scene, false);
+  });
+  cyl(0.012, 0.012, winW + 1.4, M.black, winX, 2.78, -D / 2 + 0.14, scene, 8).rotation.z = Math.PI / 2;
+  // moon (visible at night)
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(0.09, 32), new THREE.MeshBasicMaterial({ color: 0xf2efe2, transparent: true, opacity: 0 }));
+  moon.position.set(winX + 0.5, winY + 0.45, -D / 2 + 0.01); scene.add(moon);
+
+  // ---------- armchair in the back corner ----------
+  const chair = new THREE.Group();
+  chair.position.set(3.0, 0, -2.6); chair.rotation.y = -0.75; scene.add(chair);
+  box(0.8, 0.16, 0.75, M.boucle, 0, 0.36, 0, chair);
+  box(0.8, 0.5, 0.16, M.boucle, 0, 0.66, -0.32, chair).rotation.x = -0.12;
+  box(0.12, 0.3, 0.7, M.boucle, -0.38, 0.52, 0, chair);
+  box(0.12, 0.3, 0.7, M.boucle, 0.38, 0.52, 0, chair);
+  box(0.84, 0.05, 0.78, M.walnut, 0, 0.26, 0, chair);
+  [[-0.36, -0.32], [0.36, -0.32], [-0.36, 0.32], [0.36, 0.32]].forEach(([x, z]) => cyl(0.02, 0.014, 0.24, M.walnut, x, 0.12, z, chair, 10));
+  const cushion = box(0.34, 0.3, 0.1, M.throwM, 0.1, 0.58, -0.2, chair); cushion.rotation.set(-0.2, 0.2, 0.1);
+
+  // arc floor lamp beside the chair
+  const lampBase = cyl(0.16, 0.16, 0.03, M.black, 2.2, 0.015, -3.0);
+  const arc = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(2.2, 0.02, -3.0), new THREE.Vector3(2.2, 1.6, -3.0), new THREE.Vector3(2.4, 2.1, -2.7), new THREE.Vector3(2.75, 2.05, -2.3)
+  ]);
+  add(new THREE.Mesh(new THREE.TubeGeometry(arc, 40, 0.012, 8), M.black), 0, 0, 0);
+  const floorShade = cyl(0.06, 0.17, 0.18, M.black, 2.75, 1.92, -2.3, scene, 32);
+  floorShade.material = M.black.clone(); floorShade.material.side = THREE.DoubleSide;
+  const floorBulb = add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 12),
+    new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffc87a, emissiveIntensity: 2 })), 2.75, 1.84, -2.3, scene, false);
+  lamps.push({ bulb: floorBulb, light: null, pos: new THREE.Vector3(2.75, 1.78, -2.3) });
+
+  // ---------- fiddle-leaf fig in the front-left corner ----------
+  const plant = new THREE.Group(); plant.position.set(-3.45, 0, 2.6); scene.add(plant);
+  cyl(0.2, 0.16, 0.42, M.ceramic, 0, 0.21, 0, plant, 32);
+  cyl(0.19, 0.19, 0.01, mat(0x3b2b1e), 0, 0.42, 0, plant);
+  cyl(0.018, 0.024, 1.2, M.walnut, 0, 1.0, 0, plant, 8);
+  const leafGeo = new THREE.SphereGeometry(0.12, 10, 8); leafGeo.scale(1, 0.12, 0.65);
+  for (let i = 0; i < 34; i++) {
+    const a = i * 2.4, r = 0.1 + rnd() * 0.32, y = 0.95 + rnd() * 0.85;
+    const l = add(new THREE.Mesh(leafGeo, M.leaf), Math.cos(a) * r, y, Math.sin(a) * r, plant);
+    l.rotation.set((rnd() - .5) * 1.2, -a, -0.5 - rnd() * .6);
+  }
+
+  // ---------- framed print above the bed side (left wall, front) ----------
+  const printTex = canvasTex(300, 400, (g, w, h) => {
+    g.fillStyle = '#efeae0'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#3d4a5c'; g.beginPath(); g.arc(w * .45, h * .42, 80, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#c08a2e'; g.fillRect(w * .2, h * .6, w * .6, 26);
+    g.fillStyle = '#a65a3c'; g.beginPath(); g.arc(w * .66, h * .34, 34, 0, Math.PI * 2); g.fill();
+  });
+  box(0.03, 0.82, 0.62, M.black, -W / 2 + 0.02, 1.6, 2.1);
+  const print = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.74), new THREE.MeshStandardMaterial({ map: printTex, roughness: 0.9 }));
+  print.position.set(-W / 2 + 0.04, 1.6, 2.1); print.rotation.y = Math.PI / 2; scene.add(print);
+
+  // ---------- lighting ----------
+  const hemi = new THREE.HemisphereLight(0xdfe9f3, 0x8a7560, 0.6); scene.add(hemi);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.12); scene.add(ambient);
+  const sun = new THREE.DirectionalLight(0xfff2dc, 2.2);
+  sun.position.set(winX + 1.5, 5.2, -9); sun.target.position.set(0, 0, 0.5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 20 });
+  sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.02;
+  scene.add(sun, sun.target);
+  const fill = new THREE.DirectionalLight(0xcfdcec, 0.35); fill.position.set(2, 6, 10); scene.add(fill);
+  lamps.forEach((l, i) => {
+    l.light = new THREE.PointLight(0xffc27a, 0, 6, 1.8);
+    l.light.position.copy(l.pos);
+    if (i === 0) { l.light.castShadow = true; l.light.shadow.mapSize.set(1024, 1024); l.light.shadow.bias = -0.002; }
+    scene.add(l.light);
+  });
+
+  // ---------- TV programmes ----------
+  const CHANNELS = [
+    { name: 'Coastline', tint: [255, 170, 120], draw(g, w, h, t) {
+      const sky = g.createLinearGradient(0, 0, 0, h * .6);
+      sky.addColorStop(0, '#2b2d55'); sky.addColorStop(.6, '#e0715a'); sky.addColorStop(1, '#f6c27a');
+      g.fillStyle = sky; g.fillRect(0, 0, w, h * .6);
+      g.fillStyle = '#ffd99a'; g.beginPath(); g.arc(w * .62, h * .58, 44, Math.PI, 0); g.fill();
+      for (let i = 0; i < 18; i++) {
+        const y = h * .6 + i * 9;
+        g.fillStyle = `hsl(${210 - i * 3}, 45%, ${30 - i}%)`; g.fillRect(0, y, w, 9);
+        g.fillStyle = 'rgba(255,210,150,0.5)';
+        const ww = 60 - i * 2, xo = Math.sin(t * 1.2 + i) * 14;
+        g.fillRect(w * .62 - ww / 2 + xo, y + 3, ww, 2);
+      }
+    }},
+    { name: 'Night Drive', tint: [200, 90, 255], draw(g, w, h, t) {
+      g.fillStyle = '#120a24'; g.fillRect(0, 0, w, h);
+      const hz = h * .52;
+      const sky = g.createLinearGradient(0, 0, 0, hz);
+      sky.addColorStop(0, '#120a24'); sky.addColorStop(1, '#7a2a7a'); g.fillStyle = sky; g.fillRect(0, 0, w, hz);
+      g.strokeStyle = '#ff5fd2'; g.lineWidth = 2;
+      for (let i = -10; i <= 10; i++) { g.beginPath(); g.moveTo(w / 2 + i * 12, hz); g.lineTo(w / 2 + i * 90, h); g.stroke(); }
+      for (let i = 0; i < 10; i++) {
+        const p = ((i + (t * 0.8) % 1) / 10); const y = hz + (h - hz) * p * p;
+        g.globalAlpha = p; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+      }
+      g.globalAlpha = 1;
+      g.fillStyle = '#ffb347'; g.beginPath(); g.arc(w / 2, hz, 70, Math.PI, 0); g.fill();
+    }},
+    { name: 'Forecast', tint: [140, 200, 255], draw(g, w, h, t) {
+      g.fillStyle = '#0f3d5e'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#e8f3fa'; g.font = '600 34px "IBM Plex Sans", sans-serif'; g.fillText('Tomorrow', 40, 70);
+      const days = [['MON', 18, 'Sun'], ['TUE', 16, 'Cloud'], ['WED', 13, 'Rain'], ['THU', 15, 'Cloud']];
+      days.forEach(([d, c, k], i) => {
+        const x = 40 + i * 145;
+        g.fillStyle = 'rgba(255,255,255,0.08)'; g.fillRect(x, 110, 125, 200);
+        g.fillStyle = '#9cc7e3'; g.font = '500 20px "IBM Plex Mono", monospace'; g.fillText(d, x + 14, 142);
+        g.fillStyle = k === 'Sun' ? '#ffcf5a' : '#d7e3ec';
+        g.beginPath(); g.arc(x + 62, 200 + Math.sin(t * 2 + i) * 3, 28, 0, Math.PI * 2); g.fill();
+        if (k === 'Rain') { g.fillStyle = '#6fb6ff'; for (let r = 0; r < 4; r++) g.fillRect(x + 40 + r * 14, 236 + ((t * 60 + r * 9) % 20), 3, 10); }
+        g.fillStyle = '#ffffff'; g.font = '600 38px "IBM Plex Sans", sans-serif'; g.fillText(c + '°', x + 30, 296);
+      });
+    }},
+  ];
+  const state = { tv: true, ch: 0, night: true, mix: 1, chBanner: 2.5 };
+  function drawTV(t) {
+    const g = tvCtx, w = tvCanvas.width, h = tvCanvas.height;
+    if (!state.tv) { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); tvTex.needsUpdate = true; return; }
+    CHANNELS[state.ch].draw(g, w, h, t);
+    if (state.chBanner > 0) {
+      g.globalAlpha = Math.min(1, state.chBanner);
+      g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(24, h - 70, 260, 44);
+      g.fillStyle = '#fff'; g.font = '500 22px "IBM Plex Mono", monospace';
+      g.fillText(`CH ${state.ch + 1}  ${CHANNELS[state.ch].name}`, 38, h - 41);
+      g.globalAlpha = 1;
+    }
+    tvTex.needsUpdate = true;
+  }
+
+  // ---------- day / evening blend ----------
+  const skyDay = new THREE.Color(0x9ec7e8), skyNight = new THREE.Color(0x141c33);
+  const bgDay = new THREE.Color(0xe9edf0), bgNight = new THREE.Color(0x0f1318);
+  function applyMix(m) {
+    const d = 1 - m;
+    hemi.intensity = 0.15 + 0.55 * d;
+    ambient.intensity = 0.05 + 0.1 * d;
+    sun.intensity = 2.4 * d;
+    fill.intensity = 0.08 + 0.3 * d;
+    paneMat.color.copy(skyDay).lerp(skyNight, m);
+    moon.material.opacity = m;
+    scene.background = bgDay.clone().lerp(bgNight, m);
+    lamps.forEach(l => { l.light.intensity = 0.25 + 2.2 * m; l.bulb.material.emissiveIntensity = 0.3 + 2.2 * m; });
+    renderer.toneMappingExposure = 1.05 - 0.1 * m;
+  }
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const sync = () => {
+    $('btn-day').setAttribute('aria-pressed', String(!state.night));
+    $('btn-night').setAttribute('aria-pressed', String(state.night));
+    $('btn-tv').setAttribute('aria-pressed', String(state.tv));
+    $('btn-tv').textContent = state.tv ? 'TV on' : 'TV off';
+    $('btn-ch').disabled = !state.tv;
+    $('st-ch').textContent = state.tv ? `CH ${state.ch + 1} · ${CHANNELS[state.ch].name}` : 'TV standby';
+    $('st-time').textContent = state.night ? '19:40' : '11:15';
+  };
+  $('btn-day').onclick = () => { state.night = false; sync(); };
+  $('btn-night').onclick = () => { state.night = true; sync(); };
+  const toggleTV = () => { state.tv = !state.tv; state.chBanner = state.tv ? 2.5 : 0; sync(); };
+  $('btn-tv').onclick = toggleTV;
+  $('btn-ch').onclick = () => { state.ch = (state.ch + 1) % CHANNELS.length; state.chBanner = 2.5; sync(); };
+  let flyHome = false;
+  $('btn-view').onclick = () => { flyHome = true; };
+  controls.addEventListener('start', () => { flyHome = false; });
+
+  // tap the TV to toggle it
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+  let down = null;
+  renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener('pointerup', e => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    if (ray.intersectObject(screen).length) toggleTV();
+  });
+  renderer.domElement.addEventListener('pointermove', e => {
+    const r = renderer.domElement.getBoundingClientRect();
+    ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    renderer.domElement.style.cursor = ray.intersectObject(screen).length ? 'pointer' : 'grab';
+  });
+
+  // ---------- resize + loop ----------
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = w / h < 0.8 ? 60 : 42;                                         // widen on phones
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+  resize(); sync(); applyMix(state.mix);
+
+  const clock = new THREE.Clock();
+  let tvAcc = 0;
+  function frame() {
+    const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+    const goal = state.night ? 1 : 0;
+    if (Math.abs(state.mix - goal) > 0.001) {
+      state.mix += (goal - state.mix) * (reduceMotion ? 1 : Math.min(1, dt * 3));
+      applyMix(state.mix);
+    }
+    state.chBanner = Math.max(0, state.chBanner - dt);
+    tvAcc += dt;
+    if (tvAcc > 1 / 30) { drawTV(reduceMotion ? 0 : t); tvAcc = 0; }
+    const tint = CHANNELS[state.ch].tint;
+    tvLight.color.setRGB(tint[0] / 255, tint[1] / 255, tint[2] / 255);
+    const target = state.tv ? (0.6 + 1.6 * state.mix) * (reduceMotion ? 1 : 0.92 + 0.08 * Math.sin(t * 7)) : 0;
+    tvLight.intensity += (target - tvLight.intensity) * Math.min(1, dt * 8);
+    if (flyHome) {
+      camera.position.lerp(HOME.pos, Math.min(1, dt * 3));
+      controls.target.lerp(HOME.target, Math.min(1, dt * 3));
+      if (camera.position.distanceTo(HOME.pos) < 0.01) flyHome = false;
+    }
+    controls.update();
+    // dollhouse cutaway: drop a side wall once the camera is outside it
+    leftWall.visible = camera.position.x > -W / 2 + 0.5;
+    rightWall.visible = camera.position.x < W / 2 - 0.5;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>

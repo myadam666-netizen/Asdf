@@ -96,7 +96,7 @@
 <section class="card" aria-label="Room controls">
   <div>
     <h1>Slate Room</h1>
-    <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 55″ TV and a marble coffee table.</p>
+    <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 75″ TV and a marble coffee table.</p>
   </div>
   <div class="row" role="group" aria-label="Lighting">
     <button id="btn-day" aria-pressed="false">Day</button>
@@ -105,7 +105,12 @@
   <div class="row" role="group" aria-label="Television">
     <button id="btn-tv" aria-pressed="true">TV on</button>
     <button id="btn-ch">Next channel</button>
-    <button id="btn-view">Reset view</button>
+  </div>
+  <div class="row" role="group" aria-label="Camera">
+    <button id="view-home" aria-pressed="true">Whole room</button>
+    <button id="view-tv" aria-pressed="false">TV</button>
+    <button id="view-table" aria-pressed="false">Coffee table</button>
+    <button id="view-bed" aria-pressed="false">Bed</button>
   </div>
   <div class="status"><span id="st-ch">CH 1 · Coastline</span><span id="st-time">19:40</span></div>
 </section>
@@ -131,18 +136,21 @@
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-  const HOME = { pos: new THREE.Vector3(5.6, 4.4, 8.6), target: new THREE.Vector3(0, 1.0, -0.6) };
-  camera.position.copy(HOME.pos);
+  const VIEWS = {
+    home:  { pos: new THREE.Vector3(-2.4, 4.2, 8.4), target: new THREE.Vector3(0.6, 1.0, -0.8) },
+    tv:    { pos: new THREE.Vector3(0.2, 1.6, 0.6),  target: new THREE.Vector3(3.9, 1.45, -0.6) },
+    table: { pos: new THREE.Vector3(3.4, 2.3, 2.2),  target: new THREE.Vector3(1.2, 0.45, -0.6) },
+    bed:   { pos: new THREE.Vector3(0.4, 2.5, 2.6),  target: new THREE.Vector3(-2.8, 0.6, -0.6) },
+  };
+  camera.position.copy(VIEWS.home.pos);
 
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.copy(HOME.target);
+  controls.target.copy(VIEWS.home.target);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
-  controls.minDistance = 3;
+  controls.minDistance = 2;
   controls.maxDistance = 15;
   controls.maxPolarAngle = 1.42;
-  controls.minAzimuthAngle = -1.15;
-  controls.maxAzimuthAngle = 1.15;
   controls.enablePan = false;
 
   // ---------- helpers ----------
@@ -244,7 +252,7 @@
   const W = 8, D = 7, H = 3.0;
   const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(W, D), M.floor), 0, 0, 0, scene, false);
   floor.rotation.x = -Math.PI / 2;
-  box(W, H, 0.12, M.wallBack, 0, H / 2, -D / 2 - 0.06, scene, false);          // back
+  const backWall = box(W, H, 0.12, M.wallBack, 0, H / 2, -D / 2 - 0.06, scene, false);
   const leftWall = box(0.12, H, D, M.wall, -W / 2 - 0.06, H / 2, 0, scene, false);
   const rightWall = box(0.12, H, D, M.wall, W / 2 + 0.06, H / 2, 0, scene, false);
   // skirting
@@ -328,8 +336,8 @@
   box(0.18, 0.03, 0.24, mat(0xd9d2c3), W / 2 - 0.28, 0.625, tvZ - 1.0);
   box(0.16, 0.03, 0.22, mat(0x3d4a5c), W / 2 - 0.28, 0.655, tvZ - 1.0);
 
-  // TV: 55" (1.22 × 0.69 m) on a slim wall mount
-  const TVW = 1.22 * 1.25, TVH = 0.69 * 1.25;
+  // TV: 75" (1.66 × 0.93 m) on a slim wall mount
+  const TVW = 1.66, TVH = 0.93;
   box(0.04, TVH + 0.02, TVW + 0.02, M.tvBody, tvX - 0.06, 1.48, tvZ);
   const tvCanvas = document.createElement('canvas'); tvCanvas.width = 640; tvCanvas.height = 360;
   const tvCtx = tvCanvas.getContext('2d');
@@ -545,9 +553,11 @@
   const toggleTV = () => { state.tv = !state.tv; state.chBanner = state.tv ? 2.5 : 0; sync(); };
   $('btn-tv').onclick = toggleTV;
   $('btn-ch').onclick = () => { state.ch = (state.ch + 1) % CHANNELS.length; state.chBanner = 2.5; sync(); };
-  let flyHome = false;
-  $('btn-view').onclick = () => { flyHome = true; };
-  controls.addEventListener('start', () => { flyHome = false; });
+  let fly = null;
+  const viewIds = Object.keys(VIEWS);
+  const markView = k => viewIds.forEach(v => $('view-' + v).setAttribute('aria-pressed', String(v === k)));
+  viewIds.forEach(k => { $('view-' + k).onclick = () => { fly = VIEWS[k]; markView(k); }; });
+  controls.addEventListener('start', () => { fly = null; markView(null); });
 
   // tap the TV to toggle it
   const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
@@ -594,15 +604,17 @@
     tvLight.color.setRGB(tint[0] / 255, tint[1] / 255, tint[2] / 255);
     const target = state.tv ? (0.6 + 1.6 * state.mix) * (reduceMotion ? 1 : 0.92 + 0.08 * Math.sin(t * 7)) : 0;
     tvLight.intensity += (target - tvLight.intensity) * Math.min(1, dt * 8);
-    if (flyHome) {
-      camera.position.lerp(HOME.pos, Math.min(1, dt * 3));
-      controls.target.lerp(HOME.target, Math.min(1, dt * 3));
-      if (camera.position.distanceTo(HOME.pos) < 0.01) flyHome = false;
+    if (fly) {
+      const k = reduceMotion ? 1 : Math.min(1, dt * 3);
+      camera.position.lerp(fly.pos, k);
+      controls.target.lerp(fly.target, k);
+      if (camera.position.distanceTo(fly.pos) < 0.01) fly = null;
     }
     controls.update();
     // dollhouse cutaway: drop a side wall once the camera is outside it
     leftWall.visible = camera.position.x > -W / 2 + 0.5;
     rightWall.visible = camera.position.x < W / 2 - 0.5;
+    backWall.visible = camera.position.z > -D / 2 + 0.5;
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }

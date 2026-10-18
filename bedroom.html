@@ -107,7 +107,7 @@
   <div class="card-head">
     <div>
       <h1>Slate Room</h1>
-      <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 75″ TV and a marble coffee table.</p>
+      <p>An 8 × 7 m bedroom: walnut slat wall, platform bed, wall-mounted 75″ TV, and a pair of armchairs around a marble coffee table.</p>
     </div>
     <button id="btn-hide" title="Hide controls (H)">Hide</button>
   </div>
@@ -154,7 +154,7 @@
   const VIEWS = {
     home:  { pos: new THREE.Vector3(-2.4, 4.2, 8.4), target: new THREE.Vector3(0.6, 1.0, -0.8) },
     tv:    { pos: new THREE.Vector3(0.2, 1.6, 0.6),  target: new THREE.Vector3(3.9, 1.45, -0.6) },
-    table: { pos: new THREE.Vector3(3.4, 2.3, 2.2),  target: new THREE.Vector3(1.2, 0.45, -0.6) },
+    table: { pos: new THREE.Vector3(1.6, 2.6, 1.4),  target: new THREE.Vector3(1.6, 0.45, -2.3) },
     bed:   { pos: new THREE.Vector3(0.4, 2.5, 2.6),  target: new THREE.Vector3(-2.8, 0.6, -0.6) },
   };
   camera.position.copy(VIEWS.home.pos);
@@ -367,10 +367,10 @@
   scene.add(tvLight);
 
   // ---------- rug + coffee table ----------
-  const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.9), M.rug), 1.0, 0.006, tvZ, scene, false);
+  const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.0), M.rug), 1.6, 0.006, -2.3, scene, false);
   rug.rotation.x = -Math.PI / 2;
   const ct = new THREE.Group(); scene.add(ct);
-  const ctX = 1.2, ctZ = tvZ;
+  const ctX = 1.6, ctZ = -2.25;                                                  // reading nook under the window
   const top = add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.035, 64), M.marble), ctX, 0.42, ctZ, ct);
   top.scale.set(1.0, 1, 1.5);                                                    // oval top, 1.0 × 1.5 m
   const shelf = add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.025, 48), M.walnut), ctX, 0.14, ctZ, ct);
@@ -413,28 +413,32 @@
   const moon = new THREE.Mesh(new THREE.CircleGeometry(0.09, 32), new THREE.MeshBasicMaterial({ color: 0xf2efe2, transparent: true, opacity: 0 }));
   moon.position.set(winX + 0.5, winY + 0.45, -D / 2 + 0.01); scene.add(moon);
 
-  // ---------- armchair in the back corner ----------
-  const chair = new THREE.Group();
-  chair.position.set(3.0, 0, -2.6); chair.rotation.y = -0.75; scene.add(chair);
-  box(0.8, 0.16, 0.75, M.boucle, 0, 0.36, 0, chair);
-  box(0.8, 0.5, 0.16, M.boucle, 0, 0.66, -0.32, chair).rotation.x = -0.12;
-  box(0.12, 0.3, 0.7, M.boucle, -0.38, 0.52, 0, chair);
-  box(0.12, 0.3, 0.7, M.boucle, 0.38, 0.52, 0, chair);
-  box(0.84, 0.05, 0.78, M.walnut, 0, 0.26, 0, chair);
-  [[-0.36, -0.32], [0.36, -0.32], [-0.36, 0.32], [0.36, 0.32]].forEach(([x, z]) => cyl(0.02, 0.014, 0.24, M.walnut, x, 0.12, z, chair, 10));
-  const cushion = box(0.34, 0.3, 0.1, M.throwM, 0.1, 0.58, -0.2, chair); cushion.rotation.set(-0.2, 0.2, 0.1);
+  // ---------- two armchairs facing each other across the coffee table ----------
+  function armchair(x, z, rotY, cushionMat) {
+    const chair = new THREE.Group();
+    chair.position.set(x, 0, z); chair.rotation.y = rotY; scene.add(chair);
+    box(0.8, 0.16, 0.75, M.boucle, 0, 0.36, 0, chair);
+    box(0.8, 0.5, 0.16, M.boucle, 0, 0.66, -0.32, chair).rotation.x = -0.12;
+    box(0.12, 0.3, 0.7, M.boucle, -0.38, 0.52, 0, chair);
+    box(0.12, 0.3, 0.7, M.boucle, 0.38, 0.52, 0, chair);
+    box(0.84, 0.05, 0.78, M.walnut, 0, 0.26, 0, chair);
+    [[-0.36, -0.32], [0.36, -0.32], [-0.36, 0.32], [0.36, 0.32]].forEach(([cx, cz]) => cyl(0.02, 0.014, 0.24, M.walnut, cx, 0.12, cz, chair, 10));
+    box(0.34, 0.3, 0.1, cushionMat, 0.1, 0.58, -0.2, chair).rotation.set(-0.2, 0.2, 0.1);
+  }
+  armchair(ctX - 1.25, ctZ - 0.1, 1.25, M.throwM);
+  armchair(ctX + 1.25, ctZ - 0.1, -1.25, M.duvet);
 
-  // arc floor lamp beside the chair
-  const lampBase = cyl(0.16, 0.16, 0.03, M.black, 2.2, 0.015, -3.0);
+  // arc floor lamp behind the right-hand chair
+  const lampBase = cyl(0.16, 0.16, 0.03, M.black, 3.6, 0.015, -3.15);
   const arc = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(2.2, 0.02, -3.0), new THREE.Vector3(2.2, 1.6, -3.0), new THREE.Vector3(2.4, 2.1, -2.7), new THREE.Vector3(2.75, 2.05, -2.3)
+    new THREE.Vector3(3.6, 0.02, -3.15), new THREE.Vector3(3.6, 1.6, -3.15), new THREE.Vector3(3.45, 2.1, -2.85), new THREE.Vector3(3.15, 2.05, -2.5)
   ]);
   add(new THREE.Mesh(new THREE.TubeGeometry(arc, 40, 0.012, 8), M.black), 0, 0, 0);
-  const floorShade = cyl(0.06, 0.17, 0.18, M.black, 2.75, 1.92, -2.3, scene, 32);
+  const floorShade = cyl(0.06, 0.17, 0.18, M.black, 3.15, 1.92, -2.5, scene, 32);
   floorShade.material = M.black.clone(); floorShade.material.side = THREE.DoubleSide;
   const floorBulb = add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 12),
-    new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffc87a, emissiveIntensity: 2 })), 2.75, 1.84, -2.3, scene, false);
-  lamps.push({ bulb: floorBulb, light: null, pos: new THREE.Vector3(2.75, 1.78, -2.3) });
+    new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffc87a, emissiveIntensity: 2 })), 3.15, 1.84, -2.5, scene, false);
+  lamps.push({ bulb: floorBulb, light: null, pos: new THREE.Vector3(3.15, 1.78, -2.5) });
 
   // ---------- fiddle-leaf fig in the front-left corner ----------
   const plant = new THREE.Group(); plant.position.set(-3.45, 0, 2.6); scene.add(plant);

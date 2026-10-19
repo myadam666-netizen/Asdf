@@ -107,7 +107,7 @@
   <div class="card-head">
     <div>
       <h1>Slate Room</h1>
-      <p>A 5.6 × 5 m bedroom: walnut slat wall, platform bed, wall-mounted 65″ TV, and a pair of armchairs around a marble coffee table.</p>
+      <p>A 5.6 × 5 m bedroom: walnut slat wall, platform bed, wall-mounted 65″ TV, and two patterned tub chairs with a marble side table.</p>
     </div>
     <button id="btn-hide" title="Hide controls (H)">Hide</button>
   </div>
@@ -123,7 +123,7 @@
   <div class="row" role="group" aria-label="Camera">
     <button id="view-home" aria-pressed="true">Whole room</button>
     <button id="view-tv" aria-pressed="false">TV</button>
-    <button id="view-table" aria-pressed="false">Coffee table</button>
+    <button id="view-table" aria-pressed="false">Chairs</button>
     <button id="view-bed" aria-pressed="false">Bed</button>
   </div>
   <div class="status"><span id="st-ch">CH 1 · Coastline</span><span id="st-time">19:40</span></div>
@@ -155,7 +155,7 @@
   const VIEWS = {
     home:  { pos: new THREE.Vector3(-1.9, 3.4, 6.3), target: new THREE.Vector3(0.4, 0.9, -0.5) },
     tv:    { pos: new THREE.Vector3(-0.3, 1.55, -0.3), target: new THREE.Vector3(2.7, 1.45, -0.3) },
-    table: { pos: new THREE.Vector3(0.8, 2.3, 1.0),  target: new THREE.Vector3(0.8, 0.45, -1.75) },
+    table: { pos: new THREE.Vector3(0.8, 1.5, 0.55), target: new THREE.Vector3(0.8, 0.45, -1.85) },
     bed:   { pos: new THREE.Vector3(0.7, 2.3, 2.1),  target: new THREE.Vector3(-1.6, 0.6, -0.3) },
   };
   camera.position.copy(VIEWS.home.pos);
@@ -389,27 +389,10 @@
   tvLight.position.set(tvX - 0.9, 1.45, tvZ);
   scene.add(tvLight);
 
-  // ---------- rug + coffee table ----------
+  // ---------- rug under the seating nook ----------
   const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.45), M.rug), 0.8, 0.006, -1.75, scene, false);
   rug.rotation.x = -Math.PI / 2;
-  const ct = new THREE.Group(); scene.add(ct);
-  const ctX = 0.8, ctZ = -1.7;                                                   // reading nook under the window
-  const top = add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.035, 64), M.marble), ctX, 0.42, ctZ, ct);
-  top.scale.set(0.8, 1, 1.1);                                                    // oval top, 0.8 × 1.1 m
-  const shelf = add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.025, 48), M.walnut), ctX, 0.14, ctZ, ct);
-  shelf.scale.set(0.8, 1, 1.1);
-  [[0.22, 0.36], [-0.22, 0.36], [0.22, -0.36], [-0.22, -0.36]].forEach(([dx, dz]) =>
-    cyl(0.014, 0.014, 0.4, M.black, ctX + dx, 0.2, ctZ + dz, ct, 10));
-  // things on the table
-  const tray = cyl(0.17, 0.17, 0.02, M.brass, ctX - 0.05, 0.448, ctZ - 0.3, ct, 40);
-  const mug = cyl(0.04, 0.036, 0.09, M.ceramic, ctX - 0.08, 0.503, ctZ - 0.32, ct);
-  const handle = add(new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.008, 8, 16), M.ceramic), ctX - 0.08, 0.505, ctZ - 0.37, ct);
-  cyl(0.036, 0.036, 0.004, mat(0x3a2414, { roughness: 0.2 }), ctX - 0.08, 0.543, ctZ - 0.32, ct);   // coffee
-  box(0.24, 0.035, 0.32, mat(0x2f4f5a), ctX + 0.05, 0.455, ctZ + 0.28, ct);
-  box(0.22, 0.03, 0.29, mat(0xe7dfcf), ctX + 0.06, 0.488, ctZ + 0.27, ct).rotation.y = 0.12;
-  box(0.08, 0.012, 0.14, M.black, ctX + 0.16, 0.445, ctZ - 0.02, ct).rotation.y = 0.5;               // remote
-  const bowl = add(new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M.terracotta), ctX - 0.18, 0.53, ctZ + 0.1, ct);
-  bowl.material = M.terracotta.clone(); bowl.material.side = THREE.DoubleSide;
+  const ctX = 0.8, ctZ = -1.7;                                                   // seating nook under the window
 
   // ---------- floor-to-ceiling sliding window on back wall ----------
   const winX = 0.7, winW = 3.6, winH = H, winY = H / 2;
@@ -475,20 +458,88 @@
   const moon = new THREE.Mesh(new THREE.CircleGeometry(0.1, 32), new THREE.MeshBasicMaterial({ color: 0xf2efe2, transparent: true, opacity: 0 }));
   moon.position.set(winX + 0.9, 2.25, -D / 2 + 0.008); scene.add(moon);
 
-  // ---------- two armchairs facing each other across the coffee table ----------
-  function armchair(x, z, rotY, cushionMat) {
+  // ---------- two patterned tub chairs and a marble side table ----------
+  // cream boucle with black hand-drawn line pattern
+  const patternTex = canvasTex(1024, 512, (g, w, h) => {
+    g.fillStyle = '#efebe3'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 6000; i++) {                                             // boucle nubs
+      g.fillStyle = `rgba(${rnd() < .5 ? '255,255,255' : '150,140,128'},${0.08 + rnd() * 0.1})`;
+      g.beginPath(); g.arc(rnd() * w, rnd() * h, 1 + rnd() * 2, 0, Math.PI * 2); g.fill();
+    }
+    g.strokeStyle = '#1f1f22'; g.lineCap = 'round'; g.lineJoin = 'round';
+    for (let i = 0; i < 60; i++) {                                               // angular abstract lines
+      g.lineWidth = 6 + rnd() * 3;
+      let x = rnd() * w, y = rnd() * h, a = Math.floor(rnd() * 8) * Math.PI / 4;
+      g.beginPath(); g.moveTo(x, y);
+      const segs = 2 + Math.floor(rnd() * 4);
+      for (let k = 0; k < segs; k++) {
+        const len = 35 + rnd() * 80;
+        x += Math.cos(a) * len; y += Math.sin(a) * len;
+        g.lineTo(x, y);
+        a += (rnd() < 0.5 ? 1 : -1) * (Math.PI / 2 + (rnd() - 0.5) * 0.6);
+      }
+      g.stroke();
+    }
+  }, [1, 1]);
+  const tubFabric = mat(0xffffff, { map: patternTex, roughness: 1 });
+
+  // curved barrel shell: back wraps round into the arms and slopes down toward the front
+  function tubShell(R, t, arc, y0, hBack, hArm) {
+    const N = 64, pos = [], uv = [], idx = [];
+    const ring = (r, f) => [r * Math.sin(f), -r * Math.cos(f)];
+    const height = f => { const k = Math.abs(f) / arc; return hBack - (hBack - hArm) * k * k * (3 - 2 * k); };
+    function strip(fn) {                                                         // fn(i) -> [[x,y,z,u,v],[x,y,z,u,v]]
+      const base = pos.length / 3;
+      for (let i = 0; i <= N; i++) fn(i).forEach(([x, y, z, u, v]) => { pos.push(x, y, z); uv.push(u, v); });
+      for (let i = 0; i < N; i++) { const o = base + i * 2; idx.push(o, o + 2, o + 1, o + 1, o + 2, o + 3); }
+    }
+    const f = i => -arc + (2 * arc * i) / N;
+    strip(i => { const [x, z] = ring(R, f(i)); const u = i / N * 2; return [[x, y0, z, u, 0], [x, y0 + height(f(i)), z, u, 1]]; });              // outside
+    strip(i => { const [x, z] = ring(R - t, f(i)); const u = i / N * 2; return [[x, y0 + height(f(i)), z, u, 1], [x, y0 + 0.1, z, u, 0.1]]; });  // inside
+    strip(i => { const fi = f(i), y = y0 + height(fi); const [xo, zo] = ring(R, fi), [xi, zi] = ring(R - t, fi); const u = i / N * 2;
+      return [[xo, y, zo, u, 1], [xi, y + 0.015, zi, u, 0.97]]; });                                                                          // rolled top
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    return geo;
+  }
+  function tubChair(x, z, rotY) {
     const chair = new THREE.Group();
     chair.position.set(x, 0, z); chair.rotation.y = rotY; scene.add(chair);
-    box(0.8, 0.16, 0.75, M.boucle, 0, 0.36, 0, chair);
-    box(0.8, 0.5, 0.16, M.boucle, 0, 0.66, -0.32, chair).rotation.x = -0.12;
-    box(0.12, 0.3, 0.7, M.boucle, -0.38, 0.52, 0, chair);
-    box(0.12, 0.3, 0.7, M.boucle, 0.38, 0.52, 0, chair);
-    box(0.84, 0.05, 0.78, M.walnut, 0, 0.26, 0, chair);
-    [[-0.36, -0.32], [0.36, -0.32], [-0.36, 0.32], [0.36, 0.32]].forEach(([cx, cz]) => cyl(0.02, 0.014, 0.24, M.walnut, cx, 0.12, cz, chair, 10));
-    box(0.34, 0.3, 0.1, cushionMat, 0.1, 0.58, -0.2, chair).rotation.set(-0.2, 0.2, 0.1);
+    const R = 0.4;
+    const shellMat = tubFabric.clone(); shellMat.side = THREE.DoubleSide;
+    add(new THREE.Mesh(tubShell(R, 0.09, 2.2, 0.13, 0.66, 0.5), shellMat), 0, 0, 0, chair);
+    // arm ends: round caps where the shell stops at the front
+    [-1, 1].forEach(s => {
+      const f = s * 2.2, cx = (R - 0.045) * Math.sin(f), cz = -(R - 0.045) * Math.cos(f);
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.5, 16), tubFabric), cx, 0.13 + 0.25, cz, chair);
+    });
+    add(new THREE.Mesh(new THREE.CylinderGeometry(R - 0.02, R - 0.01, 0.26, 48), tubFabric), 0, 0.26, 0.0, chair);      // base
+    const seat = add(new THREE.Mesh(new THREE.CylinderGeometry(R - 0.06, R - 0.04, 0.1, 48), tubFabric), 0, 0.44, 0.02, chair);
+    seat.scale.set(1, 1, 1.02);
+    [[-0.22, -0.2], [0.22, -0.2], [-0.22, 0.2], [0.22, 0.2]].forEach(([lx, lz]) => cyl(0.013, 0.008, 0.14, M.black, lx, 0.07, lz, chair, 10));
+    return chair;
   }
-  armchair(ctX - 1.1, ctZ - 0.1, 1.25, M.throwM);
-  armchair(ctX + 1.1, ctZ - 0.1, -1.25, M.duvet);
+  tubChair(ctX - 0.62, ctZ, 0.35);
+  tubChair(ctX + 0.62, ctZ, -0.35);
+
+  // pedestal side table: round marble top on a dark hammered-metal bottle base
+  const hammerTex = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#3a3b3d'; g.fillRect(0, 0, w, h);
+    g.lineWidth = 3;
+    for (let row = 0; row < 16; row++) for (let col = 0; col < 12; col++) {
+      const x = col * w / 12, y = row * h / 16;
+      g.strokeStyle = `rgba(${200 + rnd() * 40},${200 + rnd() * 40},${205 + rnd() * 40},${0.45 + rnd() * 0.3})`;
+      g.beginPath(); g.moveTo(x, y + 18); g.lineTo(x + w / 24, y); g.lineTo(x + w / 12, y + 18); g.stroke();
+    }
+  });
+  const sideX = ctX, sideZ = ctZ - 0.18;
+  const bottle = new THREE.LatheGeometry([
+    [0.0, 0], [0.11, 0], [0.125, 0.05], [0.13, 0.14], [0.115, 0.26], [0.075, 0.38], [0.045, 0.47], [0.035, 0.54], [0.05, 0.575]
+  ].map(([r, y]) => new THREE.Vector2(r, y)), 40);
+  add(new THREE.Mesh(bottle, mat(0xffffff, { map: hammerTex, metalness: 0.75, roughness: 0.38 })), sideX, 0, sideZ);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.025, 48), M.marble), sideX, 0.59, sideZ);
 
   // arc floor lamp behind the right-hand chair
   const lampBase = cyl(0.16, 0.16, 0.03, M.black, 2.5, 0.015, -2.0);
